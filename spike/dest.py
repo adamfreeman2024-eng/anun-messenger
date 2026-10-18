@@ -22,7 +22,9 @@ class DestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         blob = self.rfile.read(length)
         try:
-            queue_id, envelope = open_route(self.private, blob)
+            queue_id, envelope, token = open_route(self.private, blob)
+            if token:
+                self.store.redeem(token)
             self.store.deposit(queue_id, envelope, ttl=30)
         except Exception:
             raw = json.dumps({"error": "bad hop"}).encode()

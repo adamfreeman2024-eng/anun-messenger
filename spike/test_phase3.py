@@ -84,7 +84,7 @@ class Phase3Test(unittest.TestCase):
                 self.assertNotIn(queue.encode(), forward.forward_bytes())
                 self.assertNotIn(letter, forward.forward_bytes())
                 _dest_url, blob = forward.take_forwards()[0]
-                got_queue, got_env = open_route(dest_priv, blob)
+                got_queue, got_env, _token = open_route(dest_priv, blob)
                 dest.deposit(got_queue, got_env, ttl=60)
                 self.assertNotIn(letter, dest.disk_bytes())
                 pulled = dest.take(queue, owner)
