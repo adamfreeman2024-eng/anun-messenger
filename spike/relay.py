@@ -233,8 +233,11 @@ class RelayHandler(BaseHTTPRequestHandler):
 
 
 def serve(store: RelayStore, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
-    RelayHandler.store = store
-    httpd = ThreadingHTTPServer((host, port), RelayHandler)
+    class Handler(RelayHandler):
+        pass
+
+    Handler.store = store
+    httpd = ThreadingHTTPServer((host, port), Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     return httpd

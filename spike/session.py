@@ -4,7 +4,7 @@ import json
 from urllib import request as urlrequest
 
 from spike.call import CallSession
-from spike.envelope import seal
+from spike.envelope import open_envelope, seal
 from spike.filebox import seal_file
 from spike.hop import seal_route
 from spike.invite import pack_invite_v2, unpack_invite_v2
@@ -31,11 +31,17 @@ class Session:
     def label(self, key: str) -> str:
         return text(self.lang, key)
 
-    def send_letter(self, recipient_public: bytes, letter: bytes, expire_at: int) -> None:
-        body = json.dumps(
-            {"v": 1, "text": letter.decode(), "expire_at": expire_at},
-            ensure_ascii=False,
-        ).encode()
+    def send_letter(
+        self,
+        recipient_public: bytes,
+        letter: bytes,
+        expire_at: int,
+        reply_invite: str | None = None,
+    ) -> None:
+        payload = {"v": 1, "text": letter.decode(), "expire_at": expire_at}
+        if reply_invite:
+            payload["reply_invite"] = reply_invite
+        body = json.dumps(payload, ensure_ascii=False).encode()
         self._forward(seal(recipient_public, body))
 
     def send_file(self, recipient_public: bytes, name: str, data: bytes, expire_at: int) -> None:
@@ -67,3 +73,7 @@ class Session:
 
 def make_v2_invite(queue_id: str, token: str, user_public: bytes, hop_public: bytes, hop_url: str) -> str:
     return pack_invite_v2(queue_id, token, user_public, hop_public, hop_url)
+
+
+def open_letter(private, envelope: bytes) -> dict:
+    return json.loads(open_envelope(private, envelope))

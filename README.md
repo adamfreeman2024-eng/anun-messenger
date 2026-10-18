@@ -20,7 +20,7 @@
 
 ```bash
 python3 -m pip install -r requirements.txt
-python3 -m unittest spike.test_spike spike.test_phase3 spike.test_continue spike.test_product
+python3 -m unittest spike.test_spike spike.test_phase3 spike.test_continue spike.test_product spike.test_reply
 ```
 
 Թեստը ուղարկում է հայերեն նամակ և ստուգում, որ այդ բայթերը ռելեի սկավառակին չկան։
