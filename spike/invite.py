@@ -32,3 +32,9 @@ def unpack_invite(invite: str) -> tuple[str, str, bytes]:
     if len(public) != 32:
         raise InviteError("bad public key")
     return parts[1], parts[2], public
+
+
+def qr_payload(invite: str) -> str:
+    """The QR image, when drawn, encodes this string and nothing else."""
+    unpack_invite(invite)
+    return invite

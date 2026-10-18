@@ -4,7 +4,7 @@ import json
 from urllib import request as urlrequest
 from urllib.error import URLError
 
-from spike.envelope import seal
+from spike.envelope import open_envelope, seal
 
 
 class CallDropped(Exception):
@@ -23,6 +23,12 @@ class CallSession:
             separators=(",", ":"),
         ).encode()
         return seal(recipient_public, payload)
+
+    def open_frame(self, private, frame: bytes) -> bytes:
+        letter = json.loads(open_envelope(private, frame))
+        if letter.get("kind") != "audio":
+            raise ValueError("not audio")
+        return bytes.fromhex(letter["audio_hex"])
 
     def send_frame(self, queue_id: str, send_cap: str, frame: bytes) -> None:
         req = urlrequest.Request(
