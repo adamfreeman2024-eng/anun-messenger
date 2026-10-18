@@ -70,7 +70,9 @@ class Phase3Test(unittest.TestCase):
             httpd = serve(forward)
             port = httpd.server_address[1]
             try:
-                body = json.dumps({"dest": "dest-relay.example", "blob_hex": route.hex()}).encode()
+                body = json.dumps(
+                    {"dest": "http://127.0.0.1/v1/hop", "blob_hex": route.hex()}
+                ).encode()
                 self.assertNotIn(letter, body)
                 self.assertNotIn(queue.encode(), body)
                 req = urlrequest.Request(

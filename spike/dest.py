@@ -6,6 +6,8 @@ import threading
 
 from spike.hop import open_route
 
+HOP_TTL = 24 * 3600
+
 
 def serve_dest(store, private, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
@@ -21,9 +23,12 @@ def serve_dest(store, private, host: str = "127.0.0.1", port: int = 0) -> Thread
             blob = self.rfile.read(length)
             try:
                 queue_id, envelope, token = open_route(private, blob)
-                if token:
-                    store.redeem(token)
-                store.deposit(queue_id, envelope, ttl=30)
+                if not token:
+                    raise PermissionError("token required")
+                got_queue, _send = store.redeem(token)
+                if got_queue != queue_id:
+                    raise PermissionError("token queue mismatch")
+                store.deposit(queue_id, envelope, ttl=HOP_TTL)
             except Exception:
                 raw = json.dumps({"error": "bad hop"}).encode()
                 self.send_response(400)

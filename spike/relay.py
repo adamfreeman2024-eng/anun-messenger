@@ -10,6 +10,8 @@ import threading
 import time
 from pathlib import Path
 
+from spike.hopurl import allowed_hop_url
+
 MAX_ENVELOPE = 64 * 1024
 MAX_TTL = 7 * 24 * 3600
 QUEUE_RE = re.compile(r"^[A-Za-z0-9_-]{32,64}$")
@@ -100,6 +102,7 @@ class RelayStore:
             self._rewrite()
 
     def hold_forward(self, dest_url: str, blob: bytes) -> None:
+        allowed_hop_url(dest_url)
         if len(blob) > MAX_ENVELOPE:
             raise ValueError("envelope too large")
         with self._lock:

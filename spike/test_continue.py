@@ -34,7 +34,8 @@ class ContinueTest(unittest.TestCase):
                 fwd_port = forward_http.server_address[1]
                 session = CallSession(f"http://127.0.0.1:{fwd_port}")
                 frame = session.frame(bob_pub, "c1", 1, AUDIO)
-                route = seal_route(dest_pub, queue, frame)
+                token = dest_store.issue_invite(queue, owner)
+                route = seal_route(dest_pub, queue, frame, token)
                 body = json.dumps(
                     {
                         "dest": f"http://127.0.0.1:{dest_port}/v1/hop",
