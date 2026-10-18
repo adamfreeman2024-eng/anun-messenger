@@ -86,5 +86,8 @@ def make_v2_invite(queue_id: str, token: str, user_public: bytes, hop_public: by
     return pack_invite_v2(queue_id, token, user_public, hop_public, hop_url)
 
 
-def open_letter(private, envelope: bytes) -> dict:
-    return json.loads(open_envelope(private, envelope))
+def open_letter(private, envelope: bytes, now: int | None = None) -> dict | None:
+    data = json.loads(open_envelope(private, envelope))
+    if now is not None and int(data.get("expire_at", 0)) <= now:
+        return None
+    return data
