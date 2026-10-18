@@ -3,8 +3,8 @@
 import json
 from urllib import request as urlrequest
 
-from spike.envelope import open_envelope, seal
-from spike.invite import pack_invite, unpack_invite
+from spike.envelope import open_envelope
+from spike.invite import pack_invite
 
 
 class LocalClient:
@@ -12,7 +12,6 @@ class LocalClient:
         self.private, self.public = keypair
         self.queue_id: str | None = None
         self.owner_cap: str | None = None
-        self.peers: dict[str, tuple[str, bytes]] = {}
 
     def private_raw(self) -> bytes:
         return self.private.private_bytes_raw()
@@ -36,39 +35,6 @@ class LocalClient:
             token = json.load(res)["token"]
         return pack_invite(self.queue_id, token, self.public)
 
-    def accept_invite(self, base: str, invite: str) -> str:
-        queue_id, token, peer_pub = unpack_invite(invite)
-        body = json.dumps({"token": token}).encode()
-        self._refuse_key(body)
-        req = urlrequest.Request(
-            f"{base}/v1/invites/redeem",
-            data=body,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urlrequest.urlopen(req) as res:
-            data = json.load(res)
-        self.peers[data["queue_id"]] = (data["send_cap"], peer_pub)
-        return queue_id
-
-    def send_text(self, base: str, queue_id: str, text: str, expire_at: int, ttl: int) -> None:
-        send_cap, peer_pub = self.peers[queue_id]
-        payload = json.dumps(
-            {"v": 1, "text": text, "expire_at": expire_at},
-            ensure_ascii=False,
-        ).encode()
-        envelope = seal(peer_pub, payload)
-        self._refuse_key(envelope)
-        req = urlrequest.Request(
-            f"{base}/v1/queues/{queue_id}",
-            data=envelope,
-            method="PUT",
-            headers={"X-Anun-Send": send_cap, "X-Anun-TTL": str(ttl)},
-        )
-        with urlrequest.urlopen(req) as res:
-            if res.status not in (200, 204):
-                raise RuntimeError(f"send failed {res.status}")
-
     def read_text(self, base: str, now: int) -> str | None:
         if not self.queue_id or not self.owner_cap:
             raise RuntimeError("no inbox")
@@ -85,7 +51,3 @@ class LocalClient:
         if int(letter["expire_at"]) <= now:
             return None
         return str(letter["text"])
-
-    def _refuse_key(self, blob: bytes) -> None:
-        if self.private_raw() in blob:
-            raise RuntimeError("refusing to send the private key")

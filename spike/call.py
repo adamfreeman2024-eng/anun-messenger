@@ -1,8 +1,6 @@
 """Voice frames go to the relay only. There is no direct-address fallback."""
 
 import json
-from urllib import request as urlrequest
-from urllib.error import URLError
 
 from spike.envelope import open_envelope, seal
 
@@ -35,17 +33,3 @@ class CallSession:
         if letter.get("kind") != "audio":
             raise ValueError("not audio")
         return str(letter["call_id"]), int(letter["seq"]), bytes.fromhex(letter["audio_hex"])
-
-    def send_frame(self, queue_id: str, send_cap: str, frame: bytes) -> None:
-        req = urlrequest.Request(
-            f"{self.relay_base}/v1/queues/{queue_id}",
-            data=frame,
-            method="PUT",
-            headers={"X-Anun-Send": send_cap, "X-Anun-TTL": "30"},
-        )
-        try:
-            with urlrequest.urlopen(req, timeout=3) as res:
-                if res.status not in (200, 204):
-                    raise CallDropped("relay rejected the frame")
-        except (URLError, TimeoutError, OSError) as exc:
-            raise CallDropped("relay down; direct connection is forbidden") from exc

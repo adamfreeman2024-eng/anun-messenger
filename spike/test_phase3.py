@@ -45,12 +45,12 @@ class Phase3Test(unittest.TestCase):
         _priv, pub = generate_keypair()
         frame = session.frame(pub, "call-1", 1, b"\x00\x01audio")
         self.assertNotIn(b"127.0.0.1", frame)
-        with self.assertRaises(CallDropped):
-            session.send_frame("queue-does-not-matter-000000000000", "cap", frame)
         src = Path(__file__).with_name("call.py").read_text()
         self.assertNotIn("peer_ip", src)
         self.assertNotIn("direct_ip", src)
-        self.assertIn("direct connection is forbidden", src)
+        self.assertNotIn("/v1/queues/", src)
+        session_src = Path(__file__).with_name("session.py").read_text()
+        self.assertIn("direct connection is forbidden", session_src)
 
     def test_forward_relay_does_not_see_queue_or_letter(self) -> None:
         bob_priv, bob_pub = generate_keypair()
