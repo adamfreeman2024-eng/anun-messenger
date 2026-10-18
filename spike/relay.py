@@ -14,6 +14,8 @@ from spike.hopurl import allowed_hop_url
 
 MAX_ENVELOPE = 64 * 1024
 MAX_TTL = 7 * 24 * 3600
+MAX_QUEUE_ITEMS = 32
+MAX_STORE_BYTES = 1024 * 1024
 QUEUE_RE = re.compile(r"^[A-Za-z0-9_-]{32,64}$")
 
 
@@ -51,6 +53,13 @@ class RelayStore:
             self._invites[token] = queue_id
         return token
 
+    def invite_queue(self, token: str) -> str:
+        with self._lock:
+            queue_id = self._invites.get(token)
+            if queue_id is None:
+                raise PermissionError("invite used or unknown")
+            return queue_id
+
     def redeem(self, token: str) -> tuple[str, str]:
         with self._lock:
             queue_id = self._invites.pop(token, None)
@@ -70,6 +79,7 @@ class RelayStore:
         with self._lock:
             if self._send.get(send_cap) != queue_id:
                 raise PermissionError("bad send cap")
+            self._reject_if_full(queue_id, envelope)
             self._drop_expired(now)
             self._queues[queue_id].append((envelope, now + ttl))
             self._rewrite()
@@ -97,6 +107,7 @@ class RelayStore:
         ttl = max(1, min(int(ttl), self.max_ttl))
         now = self.now_fn()
         with self._lock:
+            self._reject_if_full(queue_id, envelope)
             self._drop_expired(now)
             self._queues[queue_id].append((envelope, now + ttl))
             self._rewrite()
@@ -107,6 +118,12 @@ class RelayStore:
             raise ValueError("envelope too large")
         with self._lock:
             self._forwards.append((dest_url, blob))
+
+    def pop_forward(self) -> tuple[str, bytes] | None:
+        with self._lock:
+            if not self._forwards:
+                return None
+            return self._forwards.pop(0)
 
     def take_forwards(self) -> list[tuple[str, bytes]]:
         with self._lock:
@@ -120,6 +137,13 @@ class RelayStore:
 
     def disk_bytes(self) -> bytes:
         return self.path.read_bytes()
+
+    def _reject_if_full(self, queue_id: str, envelope: bytes) -> None:
+        if len(self._queues.get(queue_id, [])) >= MAX_QUEUE_ITEMS:
+            raise ValueError("queue full")
+        total = sum(len(item[0]) for items in self._queues.values() for item in items)
+        if total + len(envelope) > MAX_STORE_BYTES:
+            raise ValueError("store full")
 
     def _drop_expired(self, now: float) -> None:
         for queue_id, items in self._queues.items():

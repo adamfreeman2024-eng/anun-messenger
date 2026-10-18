@@ -4,9 +4,10 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
+from spike.relay import MAX_TTL
 from spike.hop import open_route
 
-HOP_TTL = 24 * 3600
+HOP_TTL = MAX_TTL
 
 
 def serve_dest(store, private, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
@@ -25,9 +26,9 @@ def serve_dest(store, private, host: str = "127.0.0.1", port: int = 0) -> Thread
                 queue_id, envelope, token = open_route(private, blob)
                 if not token:
                     raise PermissionError("token required")
-                got_queue, _send = store.redeem(token)
-                if got_queue != queue_id:
+                if store.invite_queue(token) != queue_id:
                     raise PermissionError("token queue mismatch")
+                store.redeem(token)
                 store.deposit(queue_id, envelope, ttl=HOP_TTL)
             except Exception:
                 raw = json.dumps({"error": "bad hop"}).encode()

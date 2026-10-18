@@ -1,6 +1,7 @@
 """Only a hop URL may be stored or opened by the forward relay."""
 
 import ipaddress
+import os
 import socket
 from urllib.parse import urlparse
 
@@ -9,7 +10,10 @@ class HopUrlError(ValueError):
     pass
 
 
-def allowed_hop_url(url: str) -> str:
+_SHARED = ipaddress.ip_network("100.64.0.0/10")
+
+
+def allowed_hop_url(url: str) -> tuple[str, str, int]:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise HopUrlError("bad scheme")
@@ -20,8 +24,6 @@ def allowed_hop_url(url: str) -> str:
     host = parsed.hostname
     if not host or host != host.lower():
         raise HopUrlError("bad host")
-    if parsed.scheme == "http" and host not in ("127.0.0.1", "localhost"):
-        raise HopUrlError("http only on loopback")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -29,21 +31,15 @@ def allowed_hop_url(url: str) -> str:
         raise HopUrlError("unresolved host") from exc
     if not infos:
         raise HopUrlError("unresolved host")
+    pins: list[str] = []
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if ip.is_loopback:
+            if parsed.scheme != "http" or os.environ.get("ANUN_ALLOW_LOOPBACK") != "1":
+                raise HopUrlError("loopback blocked")
+            pins.append(str(ip))
             continue
-        if parsed.scheme != "https" or _blocked(ip):
+        if not ip.is_global or ip in _SHARED:
             raise HopUrlError("blocked address")
-    return url
-
-
-def _blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return (
-        ip.is_private
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-        or ip.is_loopback
-    )
+        pins.append(str(ip))
+    return url, pins[0], port
