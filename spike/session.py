@@ -15,7 +15,7 @@ from spike.strings import text
 
 class Session:
     def __init__(self, forward_base: str, lang: str = "hy"):
-        if lang not in ("hy", "en"):
+        if lang not in ("hy", "en", "ru"):
             raise ValueError("lang")
         if not forward_base.startswith("http://") and not forward_base.startswith("https://"):
             raise ValueError("forward relay required")

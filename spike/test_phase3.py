@@ -104,6 +104,7 @@ class Phase3Test(unittest.TestCase):
 
     def test_both_languages_have_the_same_keys(self) -> None:
         self.assertEqual(set(STRINGS["hy"]), set(STRINGS["en"]))
+        self.assertEqual(set(STRINGS["hy"]), set(STRINGS["ru"]))
         self.assertNotIn("100%", " ".join(STRINGS["hy"].values()))
 
 

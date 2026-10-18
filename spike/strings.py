@@ -15,6 +15,13 @@ STRINGS = {
         "not_audited": "no external audit yet",
         "disappeared": "the letter has disappeared",
     },
+    "ru": {
+        "new_envelope": "новое письмо",
+        "invite_once": "приглашение одноразовое",
+        "call_dropped": "звонок оборван. прямого соединения нет",
+        "not_audited": "внешней проверки ещё нет",
+        "disappeared": "письмо исчезло",
+    },
 }
 
 
