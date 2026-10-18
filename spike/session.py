@@ -7,7 +7,7 @@ from spike.call import CallSession
 from spike.envelope import open_envelope, seal
 from spike.filebox import seal_file
 from spike.hop import seal_route
-from spike.invite import pack_invite_v2, unpack_invite_v2
+from spike.invite import pack_invite_v2, unpack_invite_v2, unpack_invite_v3
 from spike.notify import notification
 from spike.strings import text
 
@@ -21,9 +21,16 @@ class Session:
         self.forward = forward_base.rstrip("/")
         self.lang = lang
         self.peer: tuple[str, str, bytes, bytes, str] | None = None
+        self._tokens: list[str] = []
 
     def accept(self, invite: str) -> None:
+        if invite.startswith("anun3."):
+            queue_id, tokens, user_pub, hop_pub, hop_url = unpack_invite_v3(invite)
+            self.peer = (queue_id, tokens[0], user_pub, hop_pub, hop_url)
+            self._tokens = list(tokens)
+            return
         self.peer = unpack_invite_v2(invite)
+        self._tokens = [self.peer[1]]
 
     def alert(self) -> str:
         return notification(self.lang)["alert"]
@@ -46,9 +53,10 @@ class Session:
 
     def send_file(self, recipient_public: bytes, name: str, data: bytes, expire_at: int) -> None:
         chunks = seal_file(recipient_public, name, data, expire_at)
-        if len(chunks) != 1:
-            raise ValueError("file too large for one hop")
-        self._forward(chunks[0])
+        if len(self._tokens) < len(chunks):
+            raise ValueError("not enough invites for every chunk")
+        for chunk in chunks:
+            self._forward(chunk)
 
     def send_audio(self, recipient_public: bytes, audio: bytes) -> None:
         frame = CallSession(self.forward).frame(recipient_public, "call", 1, audio)
@@ -57,7 +65,10 @@ class Session:
     def _forward(self, envelope: bytes) -> None:
         if self.peer is None:
             raise RuntimeError("no invite")
-        queue_id, token, _user_pub, hop_pub, hop_url = self.peer
+        queue_id, _token, _user_pub, hop_pub, hop_url = self.peer
+        if not self._tokens:
+            raise RuntimeError("invite already used")
+        token = self._tokens.pop(0)
         route = seal_route(hop_pub, queue_id, envelope, token)
         payload = json.dumps({"dest": hop_url, "blob_hex": route.hex()}).encode()
         req = urlrequest.Request(

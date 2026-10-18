@@ -6,7 +6,7 @@ import uuid
 
 from spike.envelope import open_envelope, seal
 
-CHUNK = 16 * 1024
+CHUNK = 4 * 1024
 
 
 def seal_file(recipient_public: bytes, name: str, data: bytes, expire_at: int) -> list[bytes]:
