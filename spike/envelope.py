@@ -23,16 +23,21 @@ def generate_keypair() -> tuple[X25519PrivateKey, bytes]:
     return private, private.public_key().public_bytes_raw()
 
 
-def _key(shared: bytes, eph_pub: bytes) -> bytes:
+def _key(shared: bytes, eph_pub: bytes, info: bytes = b"anun-spike-v1") -> bytes:
     return HKDF(
         algorithm=hashes.SHA256(),
         length=32,
         salt=eph_pub,
-        info=b"anun-spike-v1",
+        info=info,
     ).derive(shared)
 
 
-def seal(recipient_public: bytes, plaintext: bytes) -> bytes:
+def seal(
+    recipient_public: bytes,
+    plaintext: bytes,
+    magic: bytes = MAGIC,
+    info: bytes = b"anun-spike-v1",
+) -> bytes:
     if not isinstance(plaintext, bytes):
         raise EnvelopeError("plaintext must be bytes")
     if len(plaintext) > MAX_PLAINTEXT:
@@ -43,23 +48,28 @@ def seal(recipient_public: bytes, plaintext: bytes) -> bytes:
     eph_pub = eph.public_key().public_bytes_raw()
     shared = eph.exchange(X25519PublicKey.from_public_bytes(recipient_public))
     nonce = os.urandom(NONCE_LEN)
-    aad = MAGIC + eph_pub
-    body = AESGCM(_key(shared, eph_pub)).encrypt(nonce, plaintext, aad)
-    return MAGIC + eph_pub + nonce + body
+    aad = magic + eph_pub
+    body = AESGCM(_key(shared, eph_pub, info)).encrypt(nonce, plaintext, aad)
+    return magic + eph_pub + nonce + body
 
 
-def open_envelope(recipient_private: X25519PrivateKey, envelope: bytes) -> bytes:
-    need = len(MAGIC) + EPH_LEN + NONCE_LEN + TAG_LEN
-    if len(envelope) < need or not envelope.startswith(MAGIC):
+def open_envelope(
+    recipient_private: X25519PrivateKey,
+    envelope: bytes,
+    magic: bytes = MAGIC,
+    info: bytes = b"anun-spike-v1",
+) -> bytes:
+    need = len(magic) + EPH_LEN + NONCE_LEN + TAG_LEN
+    if len(envelope) < need or not envelope.startswith(magic):
         raise EnvelopeError("not an Anun envelope")
-    off = len(MAGIC)
+    off = len(magic)
     eph_pub = envelope[off : off + EPH_LEN]
     off += EPH_LEN
     nonce = envelope[off : off + NONCE_LEN]
     body = envelope[off + NONCE_LEN :]
     shared = recipient_private.exchange(X25519PublicKey.from_public_bytes(eph_pub))
-    aad = MAGIC + eph_pub
+    aad = magic + eph_pub
     try:
-        return AESGCM(_key(shared, eph_pub)).decrypt(nonce, body, aad)
+        return AESGCM(_key(shared, eph_pub, info)).decrypt(nonce, body, aad)
     except Exception as exc:
         raise EnvelopeError("cannot open") from exc

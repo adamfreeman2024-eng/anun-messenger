@@ -31,6 +31,7 @@ class RelayStore:
         self._owner: dict[str, str] = {}
         self._invites: dict[str, str] = {}
         self._send: dict[str, str] = {}
+        self._forwards: list[tuple[str, bytes]] = []
 
     def create_queue(self) -> tuple[str, str]:
         queue_id = secrets.token_urlsafe(32)
@@ -84,6 +85,35 @@ class RelayStore:
             blob, _expires = items.pop(0)
             self._rewrite()
             return blob
+
+    def deposit(self, queue_id: str, envelope: bytes, ttl: int) -> None:
+        """Dest relay only, after the hop wrapper is removed. Still not plaintext."""
+        if queue_id not in self._queues:
+            raise KeyError("unknown queue")
+        if len(envelope) > MAX_ENVELOPE:
+            raise ValueError("envelope too large")
+        ttl = max(1, min(int(ttl), self.max_ttl))
+        now = self.now_fn()
+        with self._lock:
+            self._drop_expired(now)
+            self._queues[queue_id].append((envelope, now + ttl))
+            self._rewrite()
+
+    def hold_forward(self, dest_url: str, blob: bytes) -> None:
+        if len(blob) > MAX_ENVELOPE:
+            raise ValueError("envelope too large")
+        with self._lock:
+            self._forwards.append((dest_url, blob))
+
+    def take_forwards(self) -> list[tuple[str, bytes]]:
+        with self._lock:
+            items = list(self._forwards)
+            self._forwards.clear()
+            return items
+
+    def forward_bytes(self) -> bytes:
+        with self._lock:
+            return b"".join(url.encode() + b"\n" + blob for url, blob in self._forwards)
 
     def disk_bytes(self) -> bytes:
         return self.path.read_bytes()
@@ -141,6 +171,15 @@ class RelayHandler(BaseHTTPRequestHandler):
                 self._json(401, {"error": "invite used or unknown"})
                 return
             self._json(200, {"queue_id": queue_id, "send_cap": send_cap})
+            return
+        if self.path == "/v1/forward":
+            try:
+                data = json.loads(self._read() or b"{}")
+                self.store.hold_forward(str(data["dest"]), bytes.fromhex(data["blob_hex"]))
+            except (KeyError, ValueError, json.JSONDecodeError):
+                self._json(400, {"error": "bad forward"})
+                return
+            self._json(202, {"ok": True})
             return
         self._json(404, {"error": "not found"})
 
