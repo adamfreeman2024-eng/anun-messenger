@@ -30,6 +30,12 @@ class CallSession:
             raise ValueError("not audio")
         return bytes.fromhex(letter["audio_hex"])
 
+    def read_frame(self, private, frame: bytes) -> tuple[str, int, bytes]:
+        letter = json.loads(open_envelope(private, frame))
+        if letter.get("kind") != "audio":
+            raise ValueError("not audio")
+        return str(letter["call_id"]), int(letter["seq"]), bytes.fromhex(letter["audio_hex"])
+
     def send_frame(self, queue_id: str, send_cap: str, frame: bytes) -> None:
         req = urlrequest.Request(
             f"{self.relay_base}/v1/queues/{queue_id}",

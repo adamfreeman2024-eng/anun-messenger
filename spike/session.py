@@ -2,8 +2,9 @@
 
 import json
 from urllib import request as urlrequest
+from urllib.error import URLError
 
-from spike.call import CallSession
+from spike.call import CallDropped, CallSession
 from spike.envelope import open_envelope, seal
 from spike.filebox import seal_file
 from spike.hop import seal_route
@@ -61,6 +62,17 @@ class Session:
     def send_audio(self, recipient_public: bytes, audio: bytes) -> None:
         frame = CallSession(self.forward).frame(recipient_public, "call", 1, audio)
         self._forward(frame)
+
+    def send_call(self, recipient_public: bytes, frames: list[bytes], call_id: str) -> None:
+        if len(self._tokens) < len(frames):
+            raise ValueError("not enough invites for every frame")
+        call = CallSession(self.forward)
+        for seq, audio in enumerate(frames, start=1):
+            frame = call.frame(recipient_public, call_id, seq, audio)
+            try:
+                self._forward(frame)
+            except (URLError, TimeoutError, OSError) as exc:
+                raise CallDropped("relay down; direct connection is forbidden") from exc
 
     def _forward(self, envelope: bytes) -> None:
         if self.peer is None:
